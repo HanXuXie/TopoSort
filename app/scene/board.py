@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from os import PathLike
 from pathlib import Path
 from typing import Iterable
 
@@ -16,6 +17,7 @@ from app.events.protocol import (
     DeadEnd,
     Enqueue,
     Fork,
+    StepEvent,
 )
 
 from .effects import Effects
@@ -304,7 +306,7 @@ class GraphBoard(QGraphicsView):
     def _stop_edge_animations(self, edge: _EdgeItem) -> None:
         self._stop_edge_animations_for(self._animations, edge)
 
-    def apply_event(self, event) -> None:
+    def apply_event(self, event: StepEvent) -> None:
         """Apply one protocol event to the global visual projection."""
 
         if isinstance(event, Enqueue):
@@ -374,7 +376,7 @@ class GraphBoard(QGraphicsView):
             return
         super().mouseReleaseEvent(event)
 
-    def export_png(self, path) -> None:
+    def export_png(self, path: str | PathLike[str]) -> None:
         """Render the current graph scene to a non-empty PNG."""
 
         target = Path(path)

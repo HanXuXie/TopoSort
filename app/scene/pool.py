@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from os import PathLike
 from pathlib import Path
+from typing import Iterable
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt
 from PySide6.QtGui import QColor, QImage, QPainter
@@ -71,7 +73,7 @@ class CandidatePool(QWidget):
             self._layout.insertWidget(self._layout.count() - 1, chip)
         self.adjustSize()
 
-    def set_ready(self, nodes) -> None:
+    def set_ready(self, nodes: Iterable[str]) -> None:
         """Replace the visible ready set with unique, sorted node names."""
 
         self._ready_nodes = {str(node) for node in nodes}
@@ -107,7 +109,7 @@ class CandidatePool(QWidget):
         animation.finished.connect(finish)
         animation.start()
 
-    def export_png(self, path) -> None:
+    def export_png(self, path: str | PathLike[str]) -> None:
         """Render the current candidate-chip region to a non-empty PNG."""
 
         self.adjustSize()

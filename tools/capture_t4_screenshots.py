@@ -43,6 +43,30 @@ def _new_board() -> GraphBoard:
     return GraphBoard(NODES, EDGES, LAYERS)
 
 
+def _prepare_ready_state(
+    board: GraphBoard,
+    pool: CandidatePool,
+    nodes: tuple[str, ...],
+) -> None:
+    for node in nodes:
+        board.apply_event(Enqueue(node, 0))
+    pool.set_ready(nodes)
+
+
+def _prepare_active_state(
+    board: GraphBoard,
+    pool: CandidatePool,
+    node: str,
+) -> None:
+    _prepare_ready_state(board, pool, (node,))
+    board.apply_event(Consume(node, 0))
+    pool.on_consume(node)
+
+
+def _wait_for_active_frame() -> None:
+    QTest.qWait(Effects.PULSE_MS // 2)
+
+
 def _compose(board_path: Path, pool_path: Path, output: Path) -> None:
     board_image = QImage(str(board_path))
     pool_image = QImage(str(pool_path))
@@ -76,8 +100,7 @@ def main() -> None:
 
     ready_board = _new_board()
     ready_pool = CandidatePool()
-    ready_board.apply_event(Enqueue("A", 0))
-    ready_pool.set_ready(["A", "B"])
+    _prepare_ready_state(ready_board, ready_pool, ("A", "B"))
     _capture_state(
         ready_board,
         ready_pool,
@@ -86,9 +109,9 @@ def main() -> None:
 
     active_board = _new_board()
     active_pool = CandidatePool()
-    active_pool.set_ready(["A"])
-    active_board.apply_event(Consume("A", 0))
+    _prepare_active_state(active_board, active_pool, "A")
     app.processEvents()
+    _wait_for_active_frame()
     _capture_state(
         active_board,
         active_pool,

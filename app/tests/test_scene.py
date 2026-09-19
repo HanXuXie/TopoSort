@@ -1,5 +1,8 @@
 """T4 渲染场景契约测试（offscreen，验收标准本身）。骨架红，T4 后全绿。"""
 import os
+from inspect import signature
+from os import PathLike
+from typing import Iterable, get_type_hints
 
 import pytest
 from PySide6.QtCore import Property, QObject, QPropertyAnimation
@@ -8,11 +11,17 @@ from PySide6.QtWidgets import QPushButton, QWidget
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from app.scene import CandidatePool, Effects, GraphBoard  # noqa: E402
-from app.events import Complete, Consume, CycleFound, DeadEnd, Enqueue, Fork  # noqa: E402
-
-LAYERS = {"A": 0, "B": 0, "C": 1, "D": 2, "E": 1}
-NODES = frozenset(LAYERS)
-EDGES = frozenset({("A", "C"), ("A", "E"), ("B", "C"), ("C", "D")})
+from app.events import (  # noqa: E402
+    Complete,
+    Consume,
+    CycleFound,
+    DeadEnd,
+    Enqueue,
+    Fork,
+    StepEvent,
+)
+from conftest import CANON_EDGES, CANON_LAYERS, CANON_NODES  # noqa: E402
+from tools import capture_t4_screenshots  # noqa: E402
 
 
 class _AnimationProbe(QObject):
@@ -40,7 +49,7 @@ class _AnimationProbe(QObject):
 
 @pytest.fixture()
 def board(qtbot):
-    value = GraphBoard(NODES, EDGES, LAYERS)
+    value = GraphBoard(CANON_NODES, CANON_EDGES, CANON_LAYERS)
     qtbot.addWidget(value)
     return value
 
@@ -83,7 +92,7 @@ class TestVisualStates:
     def test_repeated_events_do_not_duplicate_items(self, board):
         board.apply_event(Enqueue("A", 0))
         board.apply_event(Enqueue("A", 1))
-        assert len(board._node_items) == len(NODES)
+        assert len(board._node_items) == len(CANON_NODES)
 
 
 class TestExport:
@@ -167,3 +176,82 @@ def test_effect_factories_create_bounded_qt_animations():
     assert pulse.duration() == Effects.PULSE_MS
     assert ghost.duration() == Effects.GHOST_MS
     assert edge.duration() == Effects.EDGE_DIM_MS
+
+
+def test_capture_active_state_fans_out_enqueue_then_consume():
+    calls = []
+
+    class BoardRecorder:
+        def apply_event(self, event):
+            calls.append(("board", event))
+
+    class PoolRecorder:
+        def set_ready(self, nodes):
+            calls.append(("pool-ready", tuple(nodes)))
+
+        def on_consume(self, node):
+            calls.append(("pool-consume", node))
+
+    assert hasattr(capture_t4_screenshots, "_prepare_active_state")
+    capture_t4_screenshots._prepare_active_state(
+        BoardRecorder(), PoolRecorder(), "A"
+    )
+
+    assert calls == [
+        ("board", Enqueue("A", 0)),
+        ("pool-ready", ("A",)),
+        ("board", Consume("A", 0)),
+        ("pool-consume", "A"),
+    ]
+
+
+def test_capture_ready_state_keeps_board_and_pool_in_sync():
+    calls = []
+
+    class BoardRecorder:
+        def apply_event(self, event):
+            calls.append(("board", event))
+
+    class PoolRecorder:
+        def set_ready(self, nodes):
+            calls.append(("pool-ready", tuple(nodes)))
+
+    assert hasattr(capture_t4_screenshots, "_prepare_ready_state")
+    capture_t4_screenshots._prepare_ready_state(
+        BoardRecorder(), PoolRecorder(), ("A", "B")
+    )
+
+    assert calls == [
+        ("board", Enqueue("A", 0)),
+        ("board", Enqueue("B", 0)),
+        ("pool-ready", ("A", "B")),
+    ]
+
+
+def test_capture_active_frame_waits_until_animation_midpoint(monkeypatch):
+    delays = []
+
+    class TestClock:
+        @staticmethod
+        def qWait(milliseconds):
+            delays.append(milliseconds)
+
+    monkeypatch.setattr(capture_t4_screenshots, "QTest", TestClock)
+    assert hasattr(capture_t4_screenshots, "_wait_for_active_frame")
+    capture_t4_screenshots._wait_for_active_frame()
+
+    assert delays == [Effects.PULSE_MS // 2]
+
+
+def test_public_scene_api_has_explicit_boundary_types():
+    board_hints = get_type_hints(GraphBoard.apply_event)
+    pool_hints = get_type_hints(CandidatePool.set_ready)
+    board_export_hints = get_type_hints(GraphBoard.export_png)
+    pool_export_hints = get_type_hints(CandidatePool.export_png)
+
+    assert board_hints == {"event": StepEvent, "return": type(None)}
+    assert pool_hints == {"nodes": Iterable[str], "return": type(None)}
+    assert board_export_hints["path"] == str | PathLike[str]
+    assert pool_export_hints["path"] == str | PathLike[str]
+    assert signature(GraphBoard.export_png).return_annotation in (None, "None")
+    assert signature(CandidatePool.export_png).return_annotation in (None, "None")
