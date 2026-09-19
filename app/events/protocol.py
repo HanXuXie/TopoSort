@@ -49,6 +49,7 @@ def event_to_dict(event: StepEvent) -> dict:
     """事件 → JSON 友好 dict（golden 文件与测试共用的唯一序列化口径）。
 
     frozenset → 升序 list、tuple → list；type 为事件类名。
+    注：依赖 vars()，事件类保持普通 frozen dataclass，勿加 slots=True。
     """
     out = {"type": type(event).__name__}
     for name, value in vars(event).items():

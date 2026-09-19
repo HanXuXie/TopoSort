@@ -27,11 +27,10 @@ class Timeline:
         max_completes: int | None = None,
     ):
         self.player = player
-        self.lane_limit = lane_limit
+        self.lane_limit = max(0, int(lane_limit))
         self.tick_ms = tick_ms
         if max_completes is not None:
-            player.max_completes = max_completes
-            player._kernel.max_completes = max_completes
+            player.set_max_completes(max_completes)
         self.state = "running"
         self._lanes: set[int] = set()
         self._relane()  # 初始占道（新分支尚未步进，无需补发）

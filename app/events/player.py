@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from ..models import Graph
 from .protocol import Complete, Consume, CycleFound, DeadEnd, Enqueue, Fork, StepEvent
 
@@ -28,7 +30,14 @@ class _Branch:
         "bid", "indeg", "frontier", "enqueued", "order", "bound", "pending_visual",
     )
 
-    def __init__(self, bid, indeg, frontier, order, bound):
+    def __init__(
+        self,
+        bid: int,
+        indeg: dict[str, int],
+        frontier: set[str],
+        order: list[str],
+        bound: str | None,
+    ):
         self.bid = bid
         self.indeg = indeg            # dict[str, int]：各节点剩余入度
         self.frontier = frontier      # set[str]：当前候选（入度已降为 0）
@@ -167,11 +176,20 @@ class TopoPlayer:
     """
 
     def __init__(self, graph: Graph, max_completes: int | None = None):
+        if max_completes is not None and max_completes < 1:
+            raise ValueError("max_completes 须为 None（不截断）或 ≥ 1")
         self.graph = graph
         self.max_completes = max_completes
         self._kernel = _Kernel(graph, max_completes)
 
-    def iter_events(self):
+    def set_max_completes(self, max_completes: int | None) -> None:
+        """运行期调整截断上限（同步常驻内核；Timeline 用，勿直改私有内核）。"""
+        if max_completes is not None and max_completes < 1:
+            raise ValueError("max_completes 须为 None（不截断）或 ≥ 1")
+        self.max_completes = max_completes
+        self._kernel.max_completes = max_completes
+
+    def iter_events(self) -> Iterator[StepEvent]:
         """契约：确定性（同输入两次播放逐项相等）；对无环图每条完整序恰一次 Complete。"""
         kernel = _Kernel(self.graph, self.max_completes)
         while not kernel.is_finished:
