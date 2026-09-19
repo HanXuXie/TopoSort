@@ -25,11 +25,6 @@ from app.events import (
 from app.models import Graph, parse
 from app.tests.conftest import CANON_COMPLETE_COUNT, CANON_ORDERS, CANON_TEXT
 
-PAUSE_TRANSITIONS = [
-    ("running", "pause", "paused"),
-    ("paused", "resume", "running"),
-]
-
 TESTDATA = Path(__file__).resolve().parents[2] / "evidence" / "test-data"
 CASE_STD = "001-标准五节点图"
 CASE_CYCLE = "002-二节点环"
@@ -227,12 +222,15 @@ class TestTimelineScheduling:
 
     def test_promotion_appended_after_release_same_tick(self):
         tl, ticks = self._run(lane_limit=1)
+        seen_complete_tick = False
         for tick_events in ticks:
             completes = [e for e in tick_events if isinstance(e, Complete)]
             if completes:
+                seen_complete_tick = True
                 after = tick_events[tick_events.index(completes[0]) + 1:]
                 assert any(isinstance(e, Enqueue) for e in after)  # 拍末补位补发
                 break
+        assert seen_complete_tick  # 防静默通过：标准图必有 Complete 拍
 
 
 class TestStateMachineFullTable:
