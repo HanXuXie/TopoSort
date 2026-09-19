@@ -12,7 +12,9 @@
 - 环：分支候选耗尽且仍有剩余节点 → DeadEnd(该分支剩余全体)；全部分支终止后
   发一条 CycleFound(卡住节点并集)，拼在最后一轮/拍的事件末尾。
 - 一切集合遍历一律 sorted() 字典序（抵御哈希随机化，保证跨进程确定性）。
-- max_completes：累计 Complete 达到上限立即收工，不再发任何事件。
+- max_completes：累计 Complete 达到上限立即收工，不再发任何事件；
+  且分叉前有前置保险丝——"已完成数 + 活跃分支数"达到上限即不再 Fork
+  （每条活跃分支最终至多 1 个 Complete，上界自洽），防宽并行图分支爆炸。
 """
 
 from __future__ import annotations
@@ -103,6 +105,14 @@ class _Kernel:
             br.order.append(choice)
             br.frontier.discard(choice)
             for alt in alternatives:
+                # 前置保险丝：每条活跃分支最终至多产出 1 个 Complete，
+                # "已完成数 + 活跃分支数"达到 max_completes 后不再开新分支——
+                # 防止宽并行图在首个 Complete 出现前分支阶乘爆炸（定案 §9）
+                if (
+                    self.max_completes is not None
+                    and len(self.completed) + len(self._branches) >= self.max_completes
+                ):
+                    break
                 child = _Branch(self._next_id, dict(pre_indeg), set(pre_frontier), list(pre_order), alt)
                 self._next_id += 1
                 self._branches[child.bid] = child

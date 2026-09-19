@@ -184,6 +184,23 @@ class TestKernelSemantics:
             tl.tick()
         assert len(tl.player_state_completed()) == 3
 
+    def test_prefork_fuse_bounds_wide_parallel_graph(self):
+        """前置保险丝：宽并行双链图（16 节点，C(16,8)=12870 序）在截断下
+        必须快速收工且计数恰为 cap——不修复则分支在首个 Complete 前爆炸。"""
+        nodes = {f"{t}{i}" for t in "ab" for i in range(8)}
+        edges = {(f"{t}{i}", f"{t}{i + 1}") for t in "ab" for i in range(7)}
+        tl = Timeline(
+            TopoPlayer(Graph(frozenset(nodes), frozenset(edges)), max_completes=50),
+            lane_limit=8,
+            tick_ms=1,
+        )
+        ticks = 0
+        while tl.state != "finished":
+            tl.tick()
+            ticks += 1
+            assert ticks < 10000, "前置保险丝失效：宽并行图未在有限拍内收工"
+        assert len(tl.player_state_completed()) == 50
+
     def test_empty_graph_completes_once(self):
         events = list(TopoPlayer(Graph(frozenset(), frozenset())).iter_events())
         assert events == [Complete(0, ())]
