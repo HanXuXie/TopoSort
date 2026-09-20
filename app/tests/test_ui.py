@@ -51,6 +51,7 @@ class TestEndToEnd:
 class TestFileIO:
     def test_save_open_roundtrip(self, win, tmp_path):
         f = tmp_path / "case.txt"
+        win.set_input(CANON)  # 原用例漏设输入，见 issue #6 留言
         win.save_to(f)
         win.load_from(f)
         assert win.input_text() == CANON
