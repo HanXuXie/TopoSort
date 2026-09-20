@@ -12,10 +12,21 @@
     run()  # 程序入口
 """
 
+import sys
+
 from .main_window import MainWindow
 
 __all__ = ["MainWindow", "run"]
 
+DEFAULT_SIZE = (1280, 800)
+
 
 def run() -> None:
-    raise NotImplementedError("T5: ui.run")
+    """程序入口：建 QApplication → 开主窗口 → 进事件循环。"""
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance() or QApplication(sys.argv)
+    win = MainWindow()
+    win.resize(*DEFAULT_SIZE)
+    win.show()
+    sys.exit(app.exec())
