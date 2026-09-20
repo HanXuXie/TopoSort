@@ -39,6 +39,8 @@ from app.ui.results import ResultsPanel
 
 MAX_ORDERS = 2000  # 结果流上限：阶乘爆炸时截断，避免界面卡死
 
+CANVAS_HINT_IDLE = "图画板：点「开始」后在此绘制关系图"
+
 INFO_STYLE = "QLabel { padding: 4px 8px; color: #333; }"
 ERROR_STYLE = "QLabel { padding: 4px 8px; color: #a4262c; background: #fde7e9; font-weight: bold; }"
 
@@ -69,7 +71,7 @@ class MainWindow(QWidget):
         self.canvas = QFrame()
         self.canvas.setFrameShape(QFrame.StyledPanel)
         self._canvas_layout = QVBoxLayout(self.canvas)
-        self._canvas_hint = QLabel("图画板：渲染模块（scene 模块）尚未完成")
+        self._canvas_hint = QLabel(CANVAS_HINT_IDLE)
         self._canvas_hint.setAlignment(Qt.AlignCenter)
         self._canvas_hint.setWordWrap(True)
         self._canvas_layout.addWidget(self._canvas_hint)
@@ -268,9 +270,7 @@ class MainWindow(QWidget):
         self.control.set_running(running)
 
     def _mount_board(self, graph) -> None:
-        """T4 就绪时挂上真实画布，否则留占位提示。"""
-        if self._board is not None:
-            return
+        """挂上分层画布；渲染层不可用时退回占位提示，不影响结果流。"""
         try:
             board = GraphBoard(graph.nodes, graph.edges, graph.layers())
         except NotImplementedError:
@@ -283,6 +283,15 @@ class MainWindow(QWidget):
         self._canvas_layout.addWidget(board)
         self._board = board
 
+    def _drop_board(self) -> None:
+        """卸掉旧画布。每次开始都重建：否则改输入后画布会停留在上一张图。"""
+        if self._board is not None:
+            self._canvas_layout.removeWidget(self._board)
+            self._board.deleteLater()
+            self._board = None
+        self._canvas_hint.setText(CANVAS_HINT_IDLE)
+        self._canvas_hint.show()
+
     def _clear_output(self) -> None:
         self._timer.stop()
         self._timeline = None
@@ -290,6 +299,7 @@ class MainWindow(QWidget):
         self._error = None
         self.results_panel.set_orders([])
         self.lanes.reset()
+        self._drop_board()
         self.set_running(False)
 
     def _note(self, text: str) -> None:
