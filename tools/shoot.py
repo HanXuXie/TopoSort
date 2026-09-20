@@ -25,6 +25,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # 直接执行本脚本时，让 import app.* 能找到仓库根
 
+# Windows 控制台默认 GBK，打印中文文件名会抛 UnicodeEncodeError；统一改 UTF-8
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from PySide6.QtTest import QTest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
