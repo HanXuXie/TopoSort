@@ -69,7 +69,7 @@ class MainWindow(QWidget):
         self.canvas = QFrame()
         self.canvas.setFrameShape(QFrame.StyledPanel)
         self._canvas_layout = QVBoxLayout(self.canvas)
-        self._canvas_hint = QLabel("图画板：渲染模块（T4 scene）尚未完成")
+        self._canvas_hint = QLabel("图画板：渲染模块（scene 模块）尚未完成")
         self._canvas_hint.setAlignment(Qt.AlignCenter)
         self._canvas_hint.setWordWrap(True)
         self._canvas_layout.addWidget(self._canvas_hint)
@@ -123,7 +123,7 @@ class MainWindow(QWidget):
             self._fail(f"解析错误：{exc}")
             return
         except NotImplementedError:
-            self._fail("算法模块（T2 models）尚未完成，无法解析输入")
+            self._fail("算法内核（models 模块）尚未完成，无法解析输入")
             return
 
         try:
@@ -133,7 +133,7 @@ class MainWindow(QWidget):
                 return
             self._results = [list(o) for o in graph.iter_topo_orders(MAX_ORDERS)]
         except NotImplementedError:
-            self._fail("算法模块（T2 models）尚未完成，无法枚举拓扑序")
+            self._fail("算法内核（models 模块）尚未完成，无法枚举拓扑序")
             return
 
         self.results_panel.set_orders(self._results)
@@ -165,7 +165,7 @@ class MainWindow(QWidget):
                 tick_ms=self.control.speed_ms(),
             )
         except NotImplementedError:
-            self._note("事件引擎（T3 events）尚未完成，跳过动画演示（结果已给出）")
+            self._note("事件引擎（events 模块）尚未完成，跳过动画演示（结果已给出）")
             return
         self.set_running(True)
         self._timer.start(self.control.speed_ms())
@@ -179,7 +179,7 @@ class MainWindow(QWidget):
         except NotImplementedError:
             self._timer.stop()
             self.set_running(False)
-            self._note("事件引擎（T3 events）尚未完成，动画已停止（结果流不受影响）")
+            self._note("事件引擎（events 模块）尚未完成，动画已停止（结果流不受影响）")
             return
         self._apply_events(events)
         if getattr(self._timeline, "state", "finished") == "finished":
@@ -209,7 +209,7 @@ class MainWindow(QWidget):
                 self._timeline.resume()
                 self._timer.start(self.control.speed_ms())
         except NotImplementedError:
-            self._note("事件引擎（T3 events）尚未完成，暂停/恢复不可用")
+            self._note("事件引擎（events 模块）尚未完成，暂停/恢复不可用")
 
     def _on_step(self) -> None:
         if self._timeline is None:
@@ -217,7 +217,7 @@ class MainWindow(QWidget):
         try:
             events = self._timeline.step_once()
         except NotImplementedError:
-            self._note("事件引擎（T3 events）尚未完成，单步不可用")
+            self._note("事件引擎（events 模块）尚未完成，单步不可用")
             return
         self._apply_events(events)
 
@@ -232,7 +232,7 @@ class MainWindow(QWidget):
                     break
                 self._apply_events(self._timeline.tick())
         except NotImplementedError:
-            self._note("事件引擎（T3 events）尚未完成，跳完不可用")
+            self._note("事件引擎（events 模块）尚未完成，跳完不可用")
             return
         self._note(f"演示结束：共 {len(self._results)} 条合法拓扑序")
 
@@ -274,7 +274,7 @@ class MainWindow(QWidget):
         try:
             board = GraphBoard(graph.nodes, graph.edges, graph.layers())
         except NotImplementedError:
-            self._canvas_hint.setText("图画板：渲染模块（T4 scene）尚未完成")
+            self._canvas_hint.setText("图画板：渲染模块（scene 模块）尚未完成")
             return
         except Exception as exc:  # 渲染层异常不该拖垮整个界面
             self._canvas_hint.setText(f"图画板初始化失败：{exc}")
