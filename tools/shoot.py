@@ -39,7 +39,7 @@ TODAY = date.today().strftime("%Y%m%d")
 WINDOW_SIZE = (1280, 800)          # 别调太小：整窗白底可能压到 20KB 以下
 MIN_BYTES = 20 * 1024              # check_docs.py 的截图门槛
 
-CANON = "<A,C>\n<A,E>\n<B,C>\n<C,D>\n"   # 标准基准图，恰 6 条合法序
+CANON = "<A,C>\n<A,E>\n<B,C>\n<C,D>\n"   # 标准基准图，恰 7 条合法序（2026-09-19 修正，原 6 条漏 A E B C D）
 BAD_PARSE = "<A,B>\n<A>\n"               # 第 2 行残缺 → 解析错误（含行号）
 CYCLE = "<A,B>\n<B,A>\n"                 # 互依赖 → 环
 
