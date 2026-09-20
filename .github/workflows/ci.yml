@@ -57,6 +57,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+
+      # Linux 无显示器环境需要 Qt 系统库（offscreen 平台仍依赖 libEGL 等；
+      # pytest-qt 插件随 pytest 自动加载，缺库会连累所有 L2 任务，见
+      # evidence/decisions/2026-09-20-CI-L2任务缺Qt系统库.md）
+      - name: 安装 Qt 系统库（仅 Linux，L2 共用）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
       - run: uv sync
       - run: uv run pytest app/tests/test_events.py -q
 
@@ -67,6 +77,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+
+      # Linux 无显示器环境需要 Qt 系统库（offscreen 平台仍依赖 libEGL 等；
+      # pytest-qt 插件随 pytest 自动加载，缺库会连累所有 L2 任务，见
+      # evidence/decisions/2026-09-20-CI-L2任务缺Qt系统库.md）
+      - name: 安装 Qt 系统库（仅 Linux，L2 共用）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
       - run: uv sync
       - run: uv run pytest app/tests/test_scene.py -q
 
@@ -77,6 +97,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+
+      # Linux 无显示器环境需要 Qt 系统库（offscreen 平台仍依赖 libEGL 等；
+      # pytest-qt 插件随 pytest 自动加载，缺库会连累所有 L2 任务，见
+      # evidence/decisions/2026-09-20-CI-L2任务缺Qt系统库.md）
+      - name: 安装 Qt 系统库（仅 Linux，L2 共用）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
       - run: uv sync
       - run: uv run pytest app/tests/test_ui.py -q
 
