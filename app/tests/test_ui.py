@@ -11,9 +11,9 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QWidget  # noqa: E402
 
+# 标准图常量取自 conftest，不在本文件复制——复制正是 6/7 数量偏差的来源（refs #13）
+from app.tests.conftest import CANON_COMPLETE_COUNT, CANON_TEXT  # noqa: E402
 from app.ui import MainWindow  # noqa: E402
-
-CANON = "<A,C>\n<A,E>\n<B,C>\n<C,D>\n"
 
 # T5 未实装时 MainWindow 只是普通类 → 整文件跳过；实装为 QWidget 后自动生效
 pytestmark = pytest.mark.skipif(
@@ -31,11 +31,10 @@ def win(qtbot):
 
 class TestEndToEnd:
     def test_paste_start_results(self, win):
-        win.set_input(CANON)
+        win.set_input(CANON_TEXT)
         win.click_start()
-        # 6 已过时（2026-09-19 修正为 7，见 evidence/decisions/2026-09-19-标准图数量修正.md）
-        # T5 实装时改为 == CANON_COMPLETE_COUNT（refs #13）
-        assert len(win.results()) == 6
+        # 标准图合法序数口径见 evidence/decisions/2026-09-19-标准图数量修正.md（7 条）
+        assert len(win.results()) == CANON_COMPLETE_COUNT
 
     def test_cycle_error_message(self, win):
         win.set_input("<A,B>\n<B,A>\n")
@@ -51,6 +50,7 @@ class TestEndToEnd:
 class TestFileIO:
     def test_save_open_roundtrip(self, win, tmp_path):
         f = tmp_path / "case.txt"
+        win.set_input(CANON_TEXT)  # 原用例漏设输入，见 issue #6 留言
         win.save_to(f)
         win.load_from(f)
-        assert win.input_text() == CANON
+        assert win.input_text() == CANON_TEXT
