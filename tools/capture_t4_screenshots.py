@@ -70,11 +70,15 @@ def _wait_for_active_frame() -> None:
 def _compose(board_path: Path, pool_path: Path, output: Path) -> None:
     board_image = QImage(str(board_path))
     pool_image = QImage(str(pool_path))
-    width = max(board_image.width(), pool_image.width()) + 40
-    height = board_image.height() + pool_image.height() + 60
+    # 放大 1.6 倍导出：保证截图体积超过 CI 的 20KB 存档红线
+    scale = 1.6
+    width = int((max(board_image.width(), pool_image.width()) + 40) * scale)
+    height = int((board_image.height() + pool_image.height() + 60) * scale)
     image = QImage(width, height, QImage.Format.Format_ARGB32)
     image.fill(QColor("#0f1726"))
     painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.scale(scale, scale)
     painter.drawImage(QPoint(20, 20), pool_image)
     painter.drawImage(QPoint(20, pool_image.height() + 35), board_image)
     painter.end()
