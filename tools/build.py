@@ -11,8 +11,8 @@
 三端差异全部在本脚本内部消化，外部调用方式完全一致：
 
     Windows  产物 dist/TopoSort.exe   传 --windowed（不弹控制台窗口）
-    macOS    产物 dist/TopoSort.app   传 --windowed（触发 .app 打包），
-                                      并额外用 ditto 打成可分发 zip（--no-zip 可关）
+    macOS    产物 dist/TopoSort.app   onedir + --windowed（产出真 .app），
+                                      再用 ditto 打成可分发 zip（--no-zip 可关）
     Linux    产物 dist/TopoSort       不传 --windowed（*NIX 上该参数会被忽略，传了也无害）
 
 平台相关的默认值（本脚本有意保守化，因为 CI 之外的平台本地验不了）：
@@ -21,6 +21,10 @@
               存在冲突风险（PyInstaller 先 strip 再签名，剥过的二进制可能过不了签名校验），
               故一律不在非 Linux 平台默认开启。
     --zip     默认**仅 macOS 开启**（.app 是目录，需打包才能作为 Release 资产分发）。
+    --mode    默认 macOS 用 onedir、其余用 onefile。PyInstaller 6.22 对 macOS 的
+              `--onefile --windowed` 已发 DEPRECATION（osx.py:33 WINDOWED_ONEFILE_DEPRCATION：
+              “a .app bundle can not be a single file” 且与 macOS 安全模型冲突，v7.0 起直接报错），
+              故 macOS 必须走 onedir。
 
 设计约束（AGENTS.md 红线）：
     * 不引入新依赖：只用标准库 + dev 组已有的 pyinstaller。
@@ -177,7 +181,8 @@ def artifact_paths(dist: Path, name: str) -> list[Path]:
     if sys.platform == "win32":
         return [dist / f"{name}.exe"]
     if sys.platform == "darwin":
-        # --windowed 在 macOS 上触发 .app；--onefile 同时留一个裸可执行文件
+        # --windowed 在 macOS 上触发 .app；onedir 与 onefile 两种模式在 macOS 上都会额外
+        # 产出 .app（makespec.py:863-873），但只有 onedir 是官方推荐且未被弃用的组合。
         return [dist / f"{name}.app", dist / name]
     return [dist / name]
 
@@ -218,6 +223,18 @@ def embedded_names(binary: Path, needles: list[bytes]) -> list[str]:
     return found
 
 
+def resolve_mode(args: argparse.Namespace) -> str:
+    """解析打包模式。
+
+    macOS 必须用 onedir：PyInstaller 对 macOS 的 `--onefile --windowed` 已发 DEPRECATION
+    （osx.py:33），理由是一个 .app 本来就不可能是单文件，且与 macOS 安全模型冲突，
+    v7.0 起会直接报错。Linux/Windows 仍用 onefile（技术栈定案要求“单文件双击即跑”）。
+    """
+    if args.mode:
+        return args.mode
+    return "onedir" if sys.platform == "darwin" else "onefile"
+
+
 def build(args: argparse.Namespace) -> tuple[Path, float]:
     dist = args.distpath
     work = args.workpath
@@ -228,7 +245,7 @@ def build(args: argparse.Namespace) -> tuple[Path, float]:
         "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--onefile",
+        f"--{resolve_mode(args)}",
         # UPX 在 Windows 上会压坏 Qt6 插件（PyInstaller 4.3 起自动排除 Qt 插件），
         # 且在 *NIX 上本就不生效；直接关掉，换取「三端构建结果可复现」。
         "--noupx",
@@ -270,6 +287,7 @@ def build(args: argparse.Namespace) -> tuple[Path, float]:
           f"实测收益≈0，见脚本注释）")
     print(f"符号表   ：{'裁剪（--strip）' if args.strip else '保留'}")
     print(f"macOS打包：{'打 .app 分发包' if args.zip else '不打'}")
+    print(f"模式     ：{resolve_mode(args)}")
     print("=" * 72)
     print("$ " + " ".join(cmd[:12]) + f" … ({len(cmd) - 12} 个参数略)")
     print()
@@ -317,10 +335,17 @@ def smoke(binary: Path, seconds: int, artifact: Path) -> bool:
 
     with tempfile.TemporaryDirectory(prefix="toposort-smoke-") as tmp:
         tmpdir = Path(tmp)
-        # 把产物单独拷进空目录：证明运行不依赖仓库里的任何文件
-        local = tmpdir / binary.name
-        shutil.copy2(binary, local)
-        local.chmod(0o755)
+        # 把产物拷进空目录：证明运行不依赖仓库里的任何文件。
+        # 注意 macOS 的 .app 是**目录**，必须整棵树拷过去——onedir 的可执行文件靠
+        # @loader_path 找 Contents/Frameworks，只拷裸二进制会因找不到库而误报失败。
+        local_artifact = tmpdir / artifact.name
+        if artifact.is_dir():
+            shutil.copytree(artifact, local_artifact, symlinks=True)
+            local = local_artifact / binary.relative_to(artifact)
+        else:
+            shutil.copy2(artifact, local_artifact)
+            local_artifact.chmod(0o755)
+            local = local_artifact
         env["HOME"] = str(tmpdir)
 
         popen_kwargs: dict = {
@@ -378,6 +403,23 @@ def smoke(binary: Path, seconds: int, artifact: Path) -> bool:
     print()
     print("✅ 冒烟通过：干净环境下启动、进入事件循环、stderr 无异常")
     return True
+
+
+def write_checksum(deliverable: Path) -> Path:
+    """写 `<交付物>.sha256`（`sha256sum -c` 兼容格式）。
+
+    为什么必须随产物一起发布、而不是写死在文档里：PyInstaller onefile 产物**不是字节
+    可复现的**（本机两次同参数构建实测 71,363,616 与 71,363,600 字节，哈希不同；
+    `SOURCE_DATE_EPOCH` 在 PyInstaller 里只对 Windows 的 PE 时间戳生效）。
+    所以校验值只能“这次构建的产物配这次的哈希”。
+    """
+    out = Path(str(deliverable) + ".sha256")
+    out.write_text(
+        f"{sha256_file(deliverable)}  {deliverable.name}\n",
+        encoding="utf-8",
+        newline="",
+    )
+    return out
 
 
 def make_app_zip(artifact: Path) -> Path:
@@ -460,6 +502,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="macOS 上不额外打 .app 分发包（默认打）",
     )
     parser.add_argument(
+        "--mode",
+        choices=["onefile", "onedir"],
+        default=None,
+        help="打包模式（默认：macOS 为 onedir，其余为 onefile）",
+    )
+    parser.add_argument(
         "--smoke",
         action="store_true",
         help="构建后做空目录启动冒烟（剥离 Python 环境变量，offscreen）",
@@ -474,6 +522,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         optimize=True,
         strip=sys.platform.startswith("linux"),
         zip=sys.platform == "darwin",
+        mode=None,
     )
     return parser.parse_args(argv)
 
@@ -509,14 +558,19 @@ def main(argv: list[str] | None = None) -> int:
     if not found:
         print("  ⚠ 目录表可能是压缩存放；以 --smoke 的运行时结果为准")
 
-    # macOS 的 .app 是目录，额外打成可分发 zip（Release 资产用它）
+    # 交付物：macOS 的 .app 是目录，先打成 zip 才能当 Release 资产；其余平台产物本身即单文件
+    deliverable = artifact
     if args.zip:
         if artifact.is_dir() and artifact.suffix == ".app":
-            zipped = make_app_zip(artifact)
-            print(f"分发包     : {zipped}（{human_mb(zipped.stat().st_size)}）")
-            print(f"分发包SHA256: {sha256_file(zipped)}")
+            deliverable = make_app_zip(artifact)
+            print(f"分发包     : {deliverable}（{human_mb(deliverable.stat().st_size)}）")
         else:
             print("（--zip 跳过：本平台产物不是 .app 目录，无需再打包）")
+
+    checksum = write_checksum(deliverable)
+    print(f"交付物     : {deliverable}")
+    print(f"交付物SHA256: {sha256_file(deliverable)}")
+    print(f"校验文件   : {checksum}（sha256sum -c 兼容）")
 
     print()
     print("建议追加到 evidence/benchmarks.csv 的一行（append-only，勿改旧行）：")
